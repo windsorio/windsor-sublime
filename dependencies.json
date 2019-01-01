@@ -1,0 +1,10 @@
+{
+	"*": {
+		"*": [
+            "shellenv",
+            "newterm",
+			"bson",
+			"websocket-client"
+		]
+	}
+}
