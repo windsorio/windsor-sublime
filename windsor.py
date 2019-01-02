@@ -76,9 +76,12 @@ def on_message(ws, message):
 		view.sel().clear()
 		view.sel().add(region)
 		view.show_at_center(region)
+	elif (_type == "EDIT_DOCUMENT"):
+		edits=payload.get("edits")
+		view.run_command("windsor_edit_document", {"edits": edits})
 	elif (_type == "EXECUTE"):
 		command=payload.get("shellPath") + " " + " ".join(payload.get("shellArgs"))
-		# TODO: figure out how to inject the terminal with the command
+		# TODO: @trello https://trello.com/c/ksbI6OCt figure out how to inject the terminal with the command
 		newterm.launch_terminal(path.dirname(view.file_name()))
 
 def on_error(ws, error):
@@ -120,6 +123,14 @@ def plugin_loaded():
 
 def plugin_unloaded():
 	disconnect()
+
+class WindsorEditDocumentCommand(sublime_plugin.TextCommand):
+	def run(self, group, edits=[]):
+		for edit in edits:
+			region=sublime.Region(edit.get("start"), edit.get("end"))
+			self.view.replace(group, region, edit.get("text"))
+	def is_visible():
+		return False
 
 class Windsor(sublime_plugin.EventListener):
 	def on_modified_async(self, view):
