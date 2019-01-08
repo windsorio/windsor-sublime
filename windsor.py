@@ -1,4 +1,3 @@
-import sys
 from os import path
 import sublime
 import sublime_plugin
@@ -30,13 +29,14 @@ def getSelections(view):
 							"character": ecol
 						}
 					} for ((srow, scol), (erow, ecol)) in [(view.rowcol(s), view.rowcol(e)) for (s, e) in selectionIndices] ]
-	return selectionIndices, selections
+	cursorIndex = selectionIndices[0][1] # TODO: This isn't necessarily the active cursor position
+	return selectionIndices, selections, cursorIndex
 
 
 def sync_active_file():
 	global ws
 	view = sublime.active_window().active_view()
-	selectionIndices, selections = getSelections(view)
+	selectionIndices, selections, cursorIndex = getSelections(view)
 	if (ws is not None):
 		ws.send(json.dumps({
 			"type": "ACTIVE_FILE",
@@ -48,6 +48,7 @@ def sync_active_file():
 				"contents": view.substr(sublime.Region(0, view.size())),
 				"selections": selections,
 				"selectionIndices": selectionIndices,
+				"cursorIndex": cursorIndex,
 				"visibleRanges": [] # TODO: implement
 			}
 		}))
@@ -106,17 +107,16 @@ def connect():
 	if(show_connecting_message):
 		sublime.active_window().status_message("Trying to connect to Windsor")
 		show_connecting_message=False
-	lock.acquire()
-	if (ws is None):
-		websocket.enableTrace(True)
-		ws = websocket.WebSocketApp("ws://localhost:61952/",
-			on_message = on_message,
-			on_error = on_error,
-			on_close = on_close)
-		ws.on_open = on_open
-		wst = threading.Thread(target=ws.run_forever)
-		wst.start()
-	lock.release()
+	with lock:
+		if (ws is None):
+			websocket.enableTrace(True)
+			ws = websocket.WebSocketApp("ws://localhost:61952/",
+				on_message = on_message,
+				on_error = on_error,
+				on_close = on_close)
+			ws.on_open = on_open
+			wst = threading.Thread(target=ws.run_forever)
+			wst.start()
 
 def plugin_loaded():
 	connect()
@@ -166,11 +166,12 @@ class Windsor(sublime_plugin.EventListener):
 	def on_selection_modified_async(self, view):
 		global ws
 		if (ws is not None and ws.sock.connected and view == sublime.active_window().active_view()):
-			selectionIndices, selections = getSelections(view)
+			selectionIndices, selections, cursorIndex = getSelections(view)
 			ws.send(json.dumps({
 				"type": "ACTIVE_FILE_SELECTIONS",
 				"payload": {
 					"selections": selections,
-					"selectionIndices": selectionIndices
+					"selectionIndices": selectionIndices,
+					"cursorIndex": cursorIndex
 				}
 			}))
